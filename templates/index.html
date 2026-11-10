@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analizador SENAMHI - Alerta de Heladas</title>
+    <style>
+        :root { --primary: #4f46e5; --bg: #f3f4f6; --text: #1f2937; --success: #10b981; --danger: #ef4444; --warning: #f59e0b; }
+        body { font-family: 'Segoe UI', sans-serif; background-color: var(--bg); color: var(--text); margin: 0; padding: 20px; }
+        .container { max-width: 1000px; margin: 0 auto; }
+        .header { background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-left: 6px solid var(--primary); display: flex; align-items: center; gap: 15px; }
+        .header h1 { margin: 0; font-size: 24px; }
+        .grid { display: grid; grid-template-columns: 1fr 1.5fr; gap: 20px; }
+        @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
+        .card { background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .card h2 { margin-top: 0; font-size: 18px; display: flex; align-items: center; gap: 10px; }
+        .step-badge { background: var(--primary); color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; }
+        textarea { width: 100%; height: 100px; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-family: monospace; font-size: 14px; box-sizing: border-box; margin-bottom: 15px; }
+        button { width: 100%; padding: 12px; background: var(--primary); color: white; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; font-weight: bold; }
+        button:hover { background: #4338ca; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 14px; }
+        th { background: #111827; color: white; padding: 10px; text-align: left; }
+        td { padding: 10px; border-bottom: 1px solid #e5e7eb; }
+        .token-badge { background: #e0e7ff; color: #3730a3; padding: 4px 8px; border-radius: 4px; font-family: monospace; font-weight: bold; font-size: 12px; }
+        .resultado { padding: 20px; border-radius: 8px; margin-top: 20px; font-weight: bold; text-align: center; font-size: 18px; }
+        .res-exito { background: #d1fae5; color: #065f46; border: 2px solid var(--success); }
+        .res-peligro { background: #fee2e2; color: #991b1b; border: 2px solid var(--danger); }
+        .res-advertencia { background: #fef3c7; color: #92400e; border: 2px solid var(--warning); }
+        .error-box { background: #fef2f2; border-left: 4px solid var(--danger); padding: 15px; margin-top: 15px; color: #991b1b; font-family: monospace; font-size: 13px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div style="font-size: 30px;">📡</div>
+            <div>
+                <h1>Estación Receptora Puno</h1>
+                <p>Analizador formal de señales satelitales - SENAMHI</p>
+            </div>
+        </div>
+        <div class="grid">
+            <div class="card">
+                <h2><span class="step-badge">1</span> Ingresar Mensaje</h2>
+                <form method="POST" enctype="multipart/form-data">
+                    <label style="font-size: 13px; font-weight: bold;">Texto Manual:</label>
+                    <textarea name="trama_manual" placeholder="Ej: HDR#ST01#TMP-05.2#BAT88">{{ trama_ingresada }}</textarea>
+                    <div style="text-align: center; color: #9ca3af; margin: 10px 0; font-size: 12px;">— O —</div>
+                    <div style="margin-bottom: 20px;">
+                        <label style="font-size: 13px; font-weight: bold;">Subir archivo .txt:</label><br>
+                        <input type="file" name="archivo_txt" accept=".txt" style="margin-top: 5px;">
+                    </div>
+                    <button type="submit">▶ ANALIZAR MENSAJE</button>
+                </form>
+                {% if mensaje_operario %}
+                <div class="resultado res-{{ tipo_alerta }}">{{ mensaje_operario }}</div>
+                {% endif %}
+            </div>
+            <div class="card">
+                <h2><span class="step-badge">2</span> Análisis Desglosado</h2>
+                {% if error_lexico %}
+                    <div class="error-box"><strong>❌ Error Léxico (AFD):</strong><br>{{ error_lexico }}</div>
+                {% endif %}
+                {% if error_sintactico %}
+                    <div class="error-box"><strong>❌ Error Sintáctico (Parser LR):</strong><br>{{ error_sintactico }}</div>
+                {% endif %}
+                {% if tokens %}
+                    <p style="color: var(--success); font-weight: bold;">✓ Secuencia desglosada detectada:</p>
+                    <table>
+                        <thead><tr><th>N°</th><th>Lexema</th><th>Token</th><th>Expresión Regular</th></tr></thead>
+                        <tbody>
+                            {% for t in tokens %}
+                            <tr>
+                                <td>{{ loop.index }}</td>
+                                <td><strong>{{ t.lexema }}</strong></td>
+                                <td><span class="token-badge">{{ t.token }}</span></td>
+                                <td style="font-family: monospace; color: #6b7280;">{{ t.regex }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% elif not error_lexico and not error_sintactico and not trama_ingresada %}
+                    <div style="text-align: center; padding: 40px 0; color: #9ca3af;">
+                        <div style="font-size: 40px; margin-bottom: 10px;">⌨️</div>
+                        <p>Esperando ingreso de datos.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</body>
+</html>
